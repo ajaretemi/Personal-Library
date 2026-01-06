@@ -453,7 +453,7 @@ export default function AdminClient() {
             <button
               className="bg-zinc-200 text-zinc-900 rounded px-4 py-2 hover:bg-zinc-300 disabled:opacity-50"
               type="button"
-              onClick={autofillByIsbn}
+              onClick={() => autofillByIsbn()}
               disabled={loading}
             >
               {loading ? "Working..." : "Auto-fill by ISBN"}
@@ -498,7 +498,7 @@ export default function AdminClient() {
                   </div>
                 ) : null}
                 {b.review ? (
-                  <div className="text-sm mt-2 whitespace-pre-wrap">
+                  <div className="text-sm mt-2 whitespace-pre-wrap text-gray-500">
                     {b.review}
                   </div>
                 ) : null}
