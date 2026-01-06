@@ -32,6 +32,25 @@ export default async function Home({ searchParams }: Props) {
 
   const supabase = await createSupabaseServerClient();
 
+  const [
+    { count: readCount },
+    { count: toReadCount },
+    { count: wishlistCount },
+  ] = await Promise.all([
+    supabase
+      .from("books")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "READ"),
+    supabase
+      .from("books")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "TO_READ"),
+    supabase
+      .from("books")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "WISHLIST"),
+  ]);
+
   let query = supabase
     .from("books")
     .select("id,title,author,status,rating,review,cover_url,created_at")
@@ -98,6 +117,30 @@ export default async function Home({ searchParams }: Props) {
           </Link>
         </div>
       </header>
+
+      {/* Global Stats */}
+      <section className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+          <p className="text-sm font-medium text-zinc-700">To Read</p>
+          <p className="mt-1 text-3xl font-bold text-zinc-900">
+            {toReadCount ?? 0}
+          </p>
+        </div>
+
+        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+          <p className="text-sm font-medium text-zinc-700">Read</p>
+          <p className="mt-1 text-3xl font-bold text-zinc-900">
+            {readCount ?? 0}
+          </p>
+        </div>
+
+        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+          <p className="text-sm font-medium text-zinc-700">Wishlist</p>
+          <p className="mt-1 text-3xl font-bold text-zinc-900">
+            {wishlistCount ?? 0}
+          </p>
+        </div>
+      </section>
 
       {/* Tabs */}
       <nav className="mt-6 flex gap-2 flex-wrap">
