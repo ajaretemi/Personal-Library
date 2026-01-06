@@ -62,8 +62,7 @@ export default async function Home({ searchParams }: Props) {
     const nextStatus = params.status ?? status;
     const nextQ = params.q ?? q;
     const nextSort = params.sort ?? sort;
-    const nextRatedOnly =
-      params.ratedOnly ?? (ratedOnly ? "1" : undefined);
+    const nextRatedOnly = params.ratedOnly ?? (ratedOnly ? "1" : undefined);
 
     if (nextStatus) p.set("status", nextStatus);
     if (nextQ) p.set("q", nextQ);
@@ -218,6 +217,13 @@ export default async function Home({ searchParams }: Props) {
                     <span className="text-zinc-600">Not rated</span>
                   )}
                 </div>
+                {b.review ? (
+                  <p className="mt-2 text-xs text-zinc-700 line-clamp-3">
+                    {b.review.length > 140
+                      ? `${b.review.slice(0, 140)}…`
+                      : b.review}
+                  </p>
+                ) : null}
               </div>
             </article>
           </Link>

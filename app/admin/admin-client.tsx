@@ -63,8 +63,10 @@ export default function AdminClient() {
   // -------------------------
   // Helpers
   // -------------------------
-  function cleanIsbn(input: string) {
-    return input
+  function cleanIsbn(input: unknown) {
+    if (input == null) return "";
+
+    return String(input)
       .replace(/[^0-9Xx]/g, "")
       .toUpperCase()
       .trim();
@@ -347,7 +349,7 @@ export default function AdminClient() {
         <form onSubmit={addBook} className="mt-4 grid gap-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-             <span className="text-sm font-medium text-zinc-900">Title</span>
+              <span className="text-sm font-medium text-zinc-900">Title</span>
               <input
                 className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={title}
@@ -383,7 +385,9 @@ export default function AdminClient() {
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-zinc-800">Rating (1–5)</span>
+              <span className="text-sm font-medium text-zinc-800">
+                Rating (1–5)
+              </span>
               <input
                 className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={rating}
@@ -412,7 +416,9 @@ export default function AdminClient() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-              <span className="text-sm font-medium text-zinc-800">Cover URL</span>
+              <span className="text-sm font-medium text-zinc-800">
+                Cover URL
+              </span>
               <input
                 className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={coverUrl}
@@ -422,7 +428,9 @@ export default function AdminClient() {
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-zinc-800">ISBN (13 preferred)</span>
+              <span className="text-sm font-medium text-zinc-800">
+                ISBN (13 preferred)
+              </span>
               <input
                 className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={isbn}
@@ -466,7 +474,9 @@ export default function AdminClient() {
 
       {/* BOOK LIST */}
       <section className="border border-zinc-300 bg-white rounded-lg p-4">
-        <h2 className="font-semibold text-zinc-900">Books (publicly visible)</h2>
+        <h2 className="font-semibold text-zinc-900">
+          Books (publicly visible)
+        </h2>
 
         <div className="mt-4 grid gap-3">
           {books.map((b) => (
@@ -475,7 +485,9 @@ export default function AdminClient() {
               className="border rounded p-3 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
-                <div className="font-medium truncate text-zinc-900">{b.title}</div>
+                <div className="font-medium truncate text-zinc-900">
+                  {b.title}
+                </div>
                 <div className="text-sm text-zinc-600">
                   {b.author ?? "Unknown"} • {b.status}
                   {typeof b.rating === "number" ? ` • ⭐ ${b.rating}/5` : ""}
@@ -515,7 +527,7 @@ export default function AdminClient() {
         </div>
       </section>
 
-            {/* SCANNER OVERLAY */}
+      {/* SCANNER OVERLAY */}
       {scanning ? (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-white text-zinc-900 rounded-lg p-4 w-full max-w-md space-y-3">
@@ -563,7 +575,9 @@ export default function AdminClient() {
             <form onSubmit={saveEdit} className="grid gap-3">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <label className="block md:col-span-2">
-                  <span className="text-sm font-medium text-zinc-800">Title</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Title
+                  </span>
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editTitle}
@@ -573,11 +587,15 @@ export default function AdminClient() {
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-800">Status</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Status
+                  </span>
                   <select
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as BookStatus)}
+                    onChange={(e) =>
+                      setEditStatus(e.target.value as BookStatus)
+                    }
                   >
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -590,7 +608,9 @@ export default function AdminClient() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <label className="block md:col-span-2">
-                  <span className="text-sm font-medium text-zinc-800">Author</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Author
+                  </span>
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editAuthor}
@@ -599,7 +619,9 @@ export default function AdminClient() {
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-800">Rating (1–5)</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Rating (1–5)
+                  </span>
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editRating}
@@ -607,7 +629,8 @@ export default function AdminClient() {
                       const v = e.target.value;
                       if (v === "") return setEditRating("");
                       const n = Number(v);
-                      if (!Number.isNaN(n)) setEditRating(Math.max(1, Math.min(5, n)));
+                      if (!Number.isNaN(n))
+                        setEditRating(Math.max(1, Math.min(5, n)));
                     }}
                     inputMode="numeric"
                     placeholder="optional"
@@ -616,7 +639,9 @@ export default function AdminClient() {
               </div>
 
               <label className="block">
-                <span className="text-sm font-medium text-zinc-800">Review</span>
+                <span className="text-sm font-medium text-zinc-800">
+                  Review
+                </span>
                 <textarea
                   className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={editReview}
@@ -628,7 +653,9 @@ export default function AdminClient() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <label className="block md:col-span-2">
-                  <span className="text-sm font-medium text-zinc-800">Cover URL</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    Cover URL
+                  </span>
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editCoverUrl}
@@ -638,7 +665,9 @@ export default function AdminClient() {
                 </label>
 
                 <label className="block">
-                  <span className="text-sm font-medium text-zinc-800">ISBN</span>
+                  <span className="text-sm font-medium text-zinc-800">
+                    ISBN
+                  </span>
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editIsbn}
