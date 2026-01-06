@@ -25,21 +25,42 @@ export default async function BookPage({
 
   const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await supabase
+  // 1) Load current book
+  const { data: current, error: currentErr } = await supabase
     .from("books")
     .select("id,title,author,status,rating,review,cover_url,isbn13,created_at")
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !data) return notFound();
+  if (currentErr || !current) return notFound();
 
-  const b = data as Book;
+  const b = current as Book;
+
+  // 2) Find "previous" (newer) book within same status
+  const { data: newer } = await supabase
+    .from("books")
+    .select("id,title")
+    .eq("status", b.status)
+    .gt("created_at", b.created_at) // newer than current
+    .order("created_at", { ascending: true }) // nearest newer
+    .limit(1)
+    .maybeSingle();
+
+  // 3) Find "next" (older) book within same status
+  const { data: older } = await supabase
+    .from("books")
+    .select("id,title")
+    .eq("status", b.status)
+    .lt("created_at", b.created_at) // older than current
+    .order("created_at", { ascending: false }) // nearest older
+    .limit(1)
+    .maybeSingle();
 
   return (
     <main className="min-h-screen p-6 max-w-4xl mx-auto">
       <header className="flex items-center justify-between gap-4">
-        <Link className="underline text-white" href="/">
-          ← Back
+        <Link className="underline text-white" href={`/?status=${b.status}`}>
+          ← Back to {b.status === "TO_READ" ? "To Read" : b.status === "READ" ? "Read" : "Wishlist"}
         </Link>
         <Link className="underline text-white" href="/admin">
           Admin
@@ -78,9 +99,7 @@ export default async function BookPage({
                 <span className="text-zinc-700">Not rated</span>
               )}
 
-              {b.isbn13 ? (
-                <span className="text-zinc-700">ISBN: {b.isbn13}</span>
-              ) : null}
+              {b.isbn13 ? <span className="text-zinc-700">ISBN: {b.isbn13}</span> : null}
             </div>
 
             <div className="mt-6">
@@ -92,6 +111,47 @@ export default async function BookPage({
               ) : (
                 <p className="mt-2 text-zinc-700">No review yet.</p>
               )}
+            </div>
+
+            {/* Next / Previous navigation */}
+            <div className="mt-8 flex items-center justify-between gap-3 border-t border-zinc-200 pt-4">
+              {newer ? (
+                <Link
+                  className="text-sm underline text-zinc-900"
+                  href={`/book/${newer.id}`}
+                  title={newer.title}
+                >
+                  ← Previous (newer)
+                </Link>
+              ) : (
+                <span className="text-sm text-zinc-500">← Previous (newer)</span>
+              )}
+
+              {older ? (
+                <Link
+                  className="text-sm underline text-zinc-900"
+                  href={`/book/${older.id}`}
+                  title={older.title}
+                >
+                  Next (older) →
+                </Link>
+              ) : (
+                <span className="text-sm text-zinc-500">Next (older) →</span>
+              )}
+            </div>
+
+            {/* Optional: show titles under the arrows (nice UX) */}
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <div className="w-1/2">
+                {newer ? (
+                  <p className="text-xs text-zinc-600 line-clamp-2">{newer.title}</p>
+                ) : null}
+              </div>
+              <div className="w-1/2 text-right">
+                {older ? (
+                  <p className="text-xs text-zinc-600 line-clamp-2">{older.title}</p>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

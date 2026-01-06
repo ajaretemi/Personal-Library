@@ -84,17 +84,17 @@ export default async function Home({ searchParams }: Props) {
     <main className="min-h-screen p-6 max-w-6xl mx-auto">
       <header className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">My Library</h1>
-          <p className="text-sm text-zinc-700">
+          <h1 className="text-2xl font-bold text-white">My Library</h1>
+          <p className="text-sm text-white">
             Public view — you edit from Admin.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Link className="underline text-zinc-900" href="/admin">
+          <Link className="underline text-white" href="/admin">
             Admin
           </Link>
-          <Link className="underline text-zinc-900" href="/login">
+          <Link className="underline text-white" href="/login">
             Login
           </Link>
         </div>
@@ -225,7 +225,7 @@ export default async function Home({ searchParams }: Props) {
       </section>
 
       {books.length === 0 ? (
-        <p className="mt-8 text-zinc-700">No books found for this view.</p>
+        <p className="mt-8 text-white">No books found for this view.</p>
       ) : null}
     </main>
   );
