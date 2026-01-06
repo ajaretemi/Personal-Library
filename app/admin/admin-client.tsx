@@ -49,6 +49,17 @@ export default function AdminClient() {
   const controlsRef = useRef<IScannerControls | null>(null);
   const [lastDetected, setLastDetected] = useState<string | null>(null);
 
+  const [editing, setEditing] = useState<Book | null>(null);
+
+  // edit form fields
+  const [editTitle, setEditTitle] = useState("");
+  const [editAuthor, setEditAuthor] = useState("");
+  const [editStatus, setEditStatus] = useState<BookStatus>("TO_READ");
+  const [editRating, setEditRating] = useState<number | "">("");
+  const [editReview, setEditReview] = useState("");
+  const [editCoverUrl, setEditCoverUrl] = useState("");
+  const [editIsbn, setEditIsbn] = useState("");
+
   // -------------------------
   // Helpers
   // -------------------------
@@ -267,13 +278,61 @@ export default function AdminClient() {
     setScanning(false);
   }
 
+  function openEdit(book: Book) {
+    setEditing(book);
+    setEditTitle(book.title ?? "");
+    setEditAuthor(book.author ?? "");
+    setEditStatus(book.status ?? "TO_READ");
+    setEditRating(typeof book.rating === "number" ? book.rating : "");
+    setEditReview(book.review ?? "");
+    setEditCoverUrl(book.cover_url ?? "");
+    setEditIsbn(book.isbn13 ?? "");
+  }
+
+  function closeEdit() {
+    setEditing(null);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!editing) return;
+
+    const cleanedIsbn = cleanIsbn(editIsbn);
+
+    setLoading(true);
+    const { error } = await supabase
+      .from("books")
+      .update({
+        title: editTitle.trim(),
+        author: editAuthor.trim() || null,
+        status: editStatus,
+        rating: editRating === "" ? null : editRating,
+        review: editReview.trim() || null,
+        cover_url: editCoverUrl.trim() || null,
+        isbn13: cleanedIsbn || null,
+      })
+      .eq("id", editing.id);
+
+    setLoading(false);
+
+    if (error) {
+      setError(error.message);
+      return;
+    }
+
+    closeEdit();
+    await load();
+  }
+
   // -------------------------
   // UI
   // -------------------------
   return (
     <div className="mt-6 space-y-8">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-zinc-600">
           Logged in: <span className="font-medium">{userId ?? "…"}</span>
         </p>
         <button className="underline" onClick={signOut}>
@@ -282,15 +341,15 @@ export default function AdminClient() {
       </div>
 
       {/* ADD BOOK */}
-      <section className="border rounded-lg p-4">
-        <h2 className="font-semibold">Add a book</h2>
+      <section className="border border-zinc-300 bg-white rounded-lg p-4">
+        <h2 className="font-semibold text-zinc-900">Add a book</h2>
 
         <form onSubmit={addBook} className="mt-4 grid gap-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-              <span className="text-sm">Title</span>
+             <span className="text-sm font-medium text-zinc-900">Title</span>
               <input
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -298,9 +357,9 @@ export default function AdminClient() {
             </label>
 
             <label className="block">
-              <span className="text-sm">Status</span>
+              <span className="text-sm font-medium text-zinc-800">Status</span>
               <select
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as BookStatus)}
               >
@@ -315,18 +374,18 @@ export default function AdminClient() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-              <span className="text-sm">Author</span>
+              <span className="text-sm font-medium text-zinc-800">Author</span>
               <input
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
               />
             </label>
 
             <label className="block">
-              <span className="text-sm">Rating (1–5)</span>
+              <span className="text-sm font-medium text-zinc-800">Rating (1–5)</span>
               <input
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={rating}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -341,9 +400,9 @@ export default function AdminClient() {
           </div>
 
           <label className="block">
-            <span className="text-sm">Review</span>
+            <span className="text-sm font-medium text-zinc-800">Review</span>
             <textarea
-              className="mt-1 w-full border rounded p-2"
+              className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={review}
               onChange={(e) => setReview(e.target.value)}
               rows={4}
@@ -353,9 +412,9 @@ export default function AdminClient() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-              <span className="text-sm">Cover URL</span>
+              <span className="text-sm font-medium text-zinc-800">Cover URL</span>
               <input
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={coverUrl}
                 onChange={(e) => setCoverUrl(e.target.value)}
                 placeholder="optional"
@@ -363,9 +422,9 @@ export default function AdminClient() {
             </label>
 
             <label className="block">
-              <span className="text-sm">ISBN (13 preferred)</span>
+              <span className="text-sm font-medium text-zinc-800">ISBN (13 preferred)</span>
               <input
-                className="mt-1 w-full border rounded p-2"
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={isbn}
                 onChange={(e) => setIsbn(e.target.value)}
                 placeholder="scan or type"
@@ -375,7 +434,7 @@ export default function AdminClient() {
 
           <div className="flex gap-3 flex-wrap">
             <button
-              className="border rounded px-4 py-2 font-medium"
+              className="bg-zinc-200 text-zinc-900 rounded px-4 py-2 hover:bg-zinc-300 disabled:opacity-50"
               type="button"
               onClick={startScan}
               disabled={loading}
@@ -384,7 +443,7 @@ export default function AdminClient() {
             </button>
 
             <button
-              className="border rounded px-4 py-2 font-medium"
+              className="bg-zinc-200 text-zinc-900 rounded px-4 py-2 hover:bg-zinc-300 disabled:opacity-50"
               type="button"
               onClick={autofillByIsbn}
               disabled={loading}
@@ -393,7 +452,7 @@ export default function AdminClient() {
             </button>
 
             <button
-              className="border rounded px-4 py-2 font-medium"
+              className="bg-indigo-600 text-white rounded px-4 py-2 font-medium hover:bg-indigo-700 disabled:opacity-50"
               type="submit"
               disabled={loading}
             >
@@ -406,8 +465,8 @@ export default function AdminClient() {
       </section>
 
       {/* BOOK LIST */}
-      <section className="border rounded-lg p-4">
-        <h2 className="font-semibold">Books (publicly visible)</h2>
+      <section className="border border-zinc-300 bg-white rounded-lg p-4">
+        <h2 className="font-semibold text-zinc-900">Books (publicly visible)</h2>
 
         <div className="mt-4 grid gap-3">
           {books.map((b) => (
@@ -416,8 +475,8 @@ export default function AdminClient() {
               className="border rounded p-3 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
-                <div className="font-medium truncate">{b.title}</div>
-                <div className="text-sm text-gray-600">
+                <div className="font-medium truncate text-zinc-900">{b.title}</div>
+                <div className="text-sm text-zinc-600">
                   {b.author ?? "Unknown"} • {b.status}
                   {typeof b.rating === "number" ? ` • ⭐ ${b.rating}/5` : ""}
                 </div>
@@ -433,25 +492,33 @@ export default function AdminClient() {
                 ) : null}
               </div>
 
-              <button
-                className="underline text-sm"
-                onClick={() => removeBook(b.id)}
-              >
-                Delete
-              </button>
+              <div className="flex gap-3 items-center">
+                <button
+                  className="underline text-sm text-zinc-900"
+                  onClick={() => openEdit(b)}
+                >
+                  Edit
+                </button>
+                <button
+                  className="underline text-sm text-zinc-900"
+                  onClick={() => removeBook(b.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
 
           {books.length === 0 ? (
-            <p className="text-gray-600">No books yet.</p>
+            <p className="text-zinc-600">No books yet.</p>
           ) : null}
         </div>
       </section>
 
-      {/* SCANNER OVERLAY */}
+            {/* SCANNER OVERLAY */}
       {scanning ? (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-4 w-full max-w-md space-y-3">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-zinc-900 rounded-lg p-4 w-full max-w-md space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Scan ISBN</h3>
               <button className="underline" onClick={stopScan}>
@@ -461,15 +528,19 @@ export default function AdminClient() {
 
             <video
               ref={videoRef}
-              className="w-full rounded border"
+              className="w-full rounded border border-zinc-300"
               muted
               playsInline
               autoPlay
             />
 
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-zinc-700">
               Point your camera at the barcode. It will detect automatically.
             </p>
+
+            {lastDetected ? (
+              <p className="text-xs text-zinc-600">Detected: {lastDetected}</p>
+            ) : null}
 
             {scanError ? (
               <p className="text-sm text-red-600">{scanError}</p>
@@ -478,8 +549,127 @@ export default function AdminClient() {
         </div>
       ) : null}
 
-      {lastDetected ? (
-        <p className="text-xs text-gray-600">Detected: {lastDetected}</p>
+      {/* EDIT MODAL */}
+      {editing ? (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-white text-zinc-900 rounded-lg p-4 w-full max-w-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold ">Edit book</h3>
+              <button className="underline" onClick={closeEdit}>
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={saveEdit} className="grid gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="block md:col-span-2">
+                  <span className="text-sm font-medium text-zinc-800">Title</span>
+                  <input
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-800">Status</span>
+                  <select
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as BookStatus)}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="block md:col-span-2">
+                  <span className="text-sm font-medium text-zinc-800">Author</span>
+                  <input
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editAuthor}
+                    onChange={(e) => setEditAuthor(e.target.value)}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-800">Rating (1–5)</span>
+                  <input
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editRating}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") return setEditRating("");
+                      const n = Number(v);
+                      if (!Number.isNaN(n)) setEditRating(Math.max(1, Math.min(5, n)));
+                    }}
+                    inputMode="numeric"
+                    placeholder="optional"
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-800">Review</span>
+                <textarea
+                  className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={editReview}
+                  onChange={(e) => setEditReview(e.target.value)}
+                  rows={4}
+                  placeholder="optional"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="block md:col-span-2">
+                  <span className="text-sm font-medium text-zinc-800">Cover URL</span>
+                  <input
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editCoverUrl}
+                    onChange={(e) => setEditCoverUrl(e.target.value)}
+                    placeholder="optional"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-zinc-800">ISBN</span>
+                  <input
+                    className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={editIsbn}
+                    onChange={(e) => setEditIsbn(e.target.value)}
+                    placeholder="optional"
+                  />
+                </label>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  className="bg-zinc-200 text-zinc-900 rounded px-4 py-2 hover:bg-zinc-300 disabled:opacity-50"
+                  onClick={closeEdit}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-indigo-600 text-white rounded px-4 py-2 font-medium hover:bg-indigo-700 disabled:opacity-50"
+                  disabled={loading}
+                >
+                  {loading ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </form>
+
+            {error ? <p className="text-red-600 text-sm">{error}</p> : null}
+          </div>
+        </div>
       ) : null}
     </div>
   );
