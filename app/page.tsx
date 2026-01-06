@@ -120,26 +120,38 @@ export default async function Home({ searchParams }: Props) {
 
       {/* Global Stats */}
       <section className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+        <Link
+          href="/?status=TO_READ"
+          className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
+        >
           <p className="text-sm font-medium text-zinc-700">To Read</p>
           <p className="mt-1 text-3xl font-bold text-zinc-900">
             {toReadCount ?? 0}
           </p>
-        </div>
+          <p className="mt-2 text-xs text-zinc-600">View</p>
+        </Link>
 
-        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+        <Link
+          href="/?status=READ"
+          className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
+        >
           <p className="text-sm font-medium text-zinc-700">Read</p>
           <p className="mt-1 text-3xl font-bold text-zinc-900">
             {readCount ?? 0}
           </p>
-        </div>
-
-        <div className="border border-zinc-300 bg-white rounded-lg p-4">
+          <p className="mt-2 text-xs text-zinc-600">View</p>
+        </Link>
+        
+        <Link
+          href="/?status=WISHLIST"
+          className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
+        >
           <p className="text-sm font-medium text-zinc-700">Wishlist</p>
           <p className="mt-1 text-3xl font-bold text-zinc-900">
             {wishlistCount ?? 0}
           </p>
-        </div>
+          <p className="mt-2 text-xs text-zinc-600">View</p>
+        </Link>
       </section>
 
       {/* Tabs */}
