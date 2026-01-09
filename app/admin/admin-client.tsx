@@ -341,9 +341,18 @@ export default function AdminClient() {
     } catch {}
     controlsRef.current = null;
 
+    // Close camera stream explicitly (important on iPhone too)
     try {
-      readerRef.current?.reset();
+      const v = videoRef.current;
+      const stream = v?.srcObject as MediaStream | null;
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+      }
+      if (v) v.srcObject = null;
     } catch {}
+
+    // If you want to be extra safe, just drop the reader instance
+    readerRef.current = null;
 
     setScanning(false);
   }
@@ -396,8 +405,8 @@ export default function AdminClient() {
       nextIsRead && !prevIsRead
         ? new Date().toISOString()
         : !nextIsRead
-          ? null
-          : editing.finished_at ?? null;
+        ? null
+        : editing.finished_at ?? null;
 
     setLoading(true);
     const { error } = await supabase
