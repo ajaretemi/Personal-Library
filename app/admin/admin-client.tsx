@@ -72,6 +72,14 @@ export default function AdminClient() {
     {}
   );
 
+  // admin list search (filters the book grid)
+  const [listQ, setListQ] = useState("");
+  const [listStatus, setListStatus] = useState<BookStatus | "ALL">("ALL");
+
+  // Admin list controls (match public layout)
+  const [listSort, setListSort] = useState<"newest" | "rated">("newest");
+  const [listTag, setListTag] = useState(""); // tag id ("" = all)
+
   // -------------------------
   // Helpers
   // -------------------------
@@ -227,6 +235,63 @@ export default function AdminClient() {
 
     await load();
   }
+
+  const allTags = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const b of books) {
+      for (const t of b.tags ?? []) {
+        map.set(t.id, t.name);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [books]);
+
+  const filteredBooks = useMemo(() => {
+    const q = listQ.trim().toLowerCase();
+
+    let out = books;
+
+    // tag dropdown filter
+    if (listTag) {
+      out = out.filter((b) => (b.tags ?? []).some((t) => t.id === listTag));
+    }
+
+    // search matches title/author/tags
+    if (q) {
+      out = out.filter((b) => {
+        const title = (b.title ?? "").toLowerCase();
+        const author = (b.author ?? "").toLowerCase();
+        const tagNames = (b.tags ?? []).map((t) => t.name.toLowerCase());
+        return (
+          title.includes(q) ||
+          author.includes(q) ||
+          tagNames.some((n) => n.includes(q))
+        );
+      });
+    }
+
+    // sorting
+    out = [...out];
+    if (listSort === "rated") {
+      out.sort((a, b) => {
+        const ar = typeof a.rating === "number" ? a.rating : -1;
+        const br = typeof b.rating === "number" ? b.rating : -1;
+        if (br !== ar) return br - ar;
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
+    } else {
+      out.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    }
+
+    return out;
+  }, [books, listQ, listSort, listTag]);
 
   // -------------------------
   // ISBN Autofill
@@ -664,61 +729,131 @@ export default function AdminClient() {
 
       {/* BOOK LIST */}
       <section className="border border-zinc-300 bg-white rounded-lg p-4">
-        <h2 className="font-semibold text-zinc-900">
-          Books (publicly visible)
-        </h2>
+        {/* Title + subtitle on separate lines */}
+        <h2 className="font-semibold text-zinc-900">Books</h2>
+        <p className="text-sm text-zinc-700">
+          Admin view — search matches title, author, and tags.
+        </p>
 
-        <div className="mt-4 grid gap-3">
-          {books.map((b) => (
-            <div
+        {/* Controls: match public layout (Search 6, Sort 3, Tag 3) */}
+        <div className="mt-4">
+          <div className="grid gap-3 md:grid-cols-12">
+            <div className="md:col-span-6">
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-800">
+                  Search
+                </span>
+                <input
+                  value={listQ}
+                  onChange={(e) => setListQ(e.target.value)}
+                  className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Search title, author, or tag…"
+                />
+              </label>
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-800">Sort</span>
+                <select
+                  value={listSort}
+                  onChange={(e) =>
+                    setListSort(e.target.value as "newest" | "rated")
+                  }
+                  className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="rated">Highest rated</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block">
+                <span className="text-sm font-medium text-zinc-800">Tag</span>
+                <select
+                  value={listTag}
+                  onChange={(e) => setListTag(e.target.value)}
+                  className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">All tags</option>
+                  {allTags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-3 text-sm text-zinc-700">
+            Showing{" "}
+            <span className="font-semibold text-zinc-900">
+              {filteredBooks.length}
+            </span>{" "}
+            of{" "}
+            <span className="font-semibold text-zinc-900">{books.length}</span>
+          </div>
+        </div>
+
+        {/* Grid: 3 books per row on desktop */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {filteredBooks.map((b) => (
+            <article
               key={b.id}
-              className="border border-zinc-300 bg-white rounded p-3 flex items-start justify-between gap-3"
+              className="border border-zinc-300 bg-white rounded-lg p-3 hover:bg-zinc-50 transition-colors"
             >
-              <div className="min-w-0">
-                <div className="font-medium truncate text-zinc-900">
+              {b.cover_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={b.cover_url}
+                  alt={`${b.title} cover`}
+                  className="w-full h-44 object-cover rounded-md border border-zinc-200"
+                />
+              ) : (
+                <div className="w-full h-44 bg-zinc-100 rounded-md flex items-center justify-center text-xs text-zinc-700 border border-zinc-200">
+                  No cover
+                </div>
+              )}
+
+              <div className="mt-2">
+                <div className="font-semibold text-zinc-900 line-clamp-2">
                   {b.title}
                 </div>
-
-                <div className="text-sm text-zinc-600">
-                  {b.author ?? "Unknown"} • {b.status}
-                  {typeof b.rating === "number" ? ` • ⭐ ${b.rating}/5` : ""}
+                <div className="text-sm text-zinc-800 line-clamp-1">
+                  {b.author ?? "Unknown"}
                 </div>
 
-                {b.isbn13 ? (
-                  <div className="text-xs text-zinc-600 mt-1">
-                    ISBN: {b.isbn13}
-                  </div>
-                ) : null}
+                <div className="text-xs mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="inline-block px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-900">
+                    {b.status}
+                  </span>
+                  {typeof b.rating === "number" ? (
+                    <span className="font-medium text-zinc-900">
+                      ⭐ {b.rating}/5
+                    </span>
+                  ) : (
+                    <span className="text-zinc-700">Not rated</span>
+                  )}
+                </div>
 
-                {b.review ? (
-                  <div className="text-sm mt-2 whitespace-pre-wrap text-zinc-700">
-                    {b.review}
-                  </div>
-                ) : null}
-
-                {b.finished_at ? (
-                  <div className="text-xs text-zinc-600 mt-1">
-                    Finished: {new Date(b.finished_at).toLocaleDateString()}
-                  </div>
-                ) : null}
-
-                {/* TAGS */}
+                {/* tags chips + add tag */}
                 <div className="mt-3">
-                  <div className="flex flex-wrap gap-2 items-center text-black">
+                  <div className="flex flex-wrap gap-2">
                     {(b.tags ?? []).map((t) => (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => removeTagFromBook(b.id, t.id)}
-                        className="text-xs px-2 py-1 rounded border border-zinc-300 bg-zinc-50 hover:bg-zinc-100"
+                        className="text-xs px-2 py-1 rounded border border-zinc-300 bg-zinc-50 hover:bg-zinc-100 text-zinc-900"
                         title="Remove tag"
                       >
-                        {t.name} <span className="ml-1 text-black">×</span>
+                        {t.name} <span className="ml-1 text-zinc-700">×</span>
                       </button>
                     ))}
-
-                    {!b.tags || b.tags.length === 0 ? (
-                      <span className="text-xs text-zinc-600">No tags yet</span>
+                    {(b.tags ?? []).length === 0 ? (
+                      <span className="text-xs text-zinc-700">No tags</span>
                     ) : null}
                   </div>
 
@@ -726,20 +861,13 @@ export default function AdminClient() {
                     <input
                       className="w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900"
                       value={newTagByBookId[b.id] ?? ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
+                      onChange={(e) =>
                         setNewTagByBookId((prev) => ({
                           ...prev,
-                          [b.id]: value,
-                        }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void addTagToBook(b.id);
-                        }
-                      }}
-                      placeholder='Add a tag like "Fantasy"'
+                          [b.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Add tag…"
                     />
                     <button
                       type="button"
@@ -751,29 +879,30 @@ export default function AdminClient() {
                     </button>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex gap-3 items-center">
-                <button
-                  className="underline text-sm text-zinc-900"
-                  onClick={() => openEdit(b)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="underline text-sm text-zinc-900"
-                  onClick={() => removeBook(b.id)}
-                >
-                  Delete
-                </button>
+                {/* Actions */}
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    className="underline text-sm text-zinc-900"
+                    onClick={() => openEdit(b)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="underline text-sm text-zinc-900"
+                    onClick={() => removeBook(b.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-            </div>
+            </article>
           ))}
-
-          {books.length === 0 ? (
-            <p className="text-zinc-600">No books yet.</p>
-          ) : null}
         </div>
+
+        {filteredBooks.length === 0 ? (
+          <p className="mt-6 text-zinc-700">No books match this search.</p>
+        ) : null}
       </section>
 
       {/* SCANNER OVERLAY */}
