@@ -10,6 +10,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 type BookStatus = "READ" | "TO_READ" | "WISHLIST";
 const STATUSES: BookStatus[] = ["READ", "TO_READ", "WISHLIST"];
 
+type Tag = { id: string; name: string };
+
 type Book = {
   id: string;
   title: string;
@@ -20,6 +22,8 @@ type Book = {
   cover_url: string | null;
   isbn13: string | null;
   created_at: string;
+  finished_at: string | null;
+  tags?: Tag[];
 };
 
 export default function AdminClient() {
@@ -30,7 +34,7 @@ export default function AdminClient() {
   const [books, setBooks] = useState<Book[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // form state
+  // add form state
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [status, setStatus] = useState<BookStatus>("TO_READ");
@@ -41,6 +45,10 @@ export default function AdminClient() {
 
   const [loading, setLoading] = useState(false);
 
+  // duplicate ISBN warnings
+  const [dupWarning, setDupWarning] = useState<string | null>(null);
+  const [editDupWarning, setEditDupWarning] = useState<string | null>(null);
+
   // scanner state
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -49,9 +57,8 @@ export default function AdminClient() {
   const controlsRef = useRef<IScannerControls | null>(null);
   const [lastDetected, setLastDetected] = useState<string | null>(null);
 
+  // edit state
   const [editing, setEditing] = useState<Book | null>(null);
-
-  // edit form fields
   const [editTitle, setEditTitle] = useState("");
   const [editAuthor, setEditAuthor] = useState("");
   const [editStatus, setEditStatus] = useState<BookStatus>("TO_READ");
@@ -60,22 +67,40 @@ export default function AdminClient() {
   const [editCoverUrl, setEditCoverUrl] = useState("");
   const [editIsbn, setEditIsbn] = useState("");
 
+  // per-book tag input
+  const [newTagByBookId, setNewTagByBookId] = useState<Record<string, string>>(
+    {}
+  );
+
   // -------------------------
   // Helpers
   // -------------------------
   function cleanIsbn(input: unknown) {
     if (input == null) return "";
-
     return String(input)
       .replace(/[^0-9Xx]/g, "")
       .toUpperCase()
       .trim();
   }
 
+  function normalizeTagName(name: string) {
+    return name.trim().replace(/\s+/g, " ");
+  }
+
+  function findDuplicateByIsbn(cleanedIsbn: string, excludeId?: string) {
+    if (!cleanedIsbn) return null;
+
+    const target = cleanedIsbn.toUpperCase();
+    return (
+      books.find(
+        (b) => b.id !== excludeId && (b.isbn13 ?? "").toUpperCase() === target
+      ) ?? null
+    );
+  }
+
   async function load() {
     setError(null);
 
-    // get logged-in user
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr) {
       setError(userErr.message);
@@ -83,11 +108,15 @@ export default function AdminClient() {
     }
     setUserId(userRes.user?.id ?? null);
 
-    // load books (publicly visible but we're on admin)
     const { data, error } = await supabase
       .from("books")
       .select(
-        "id,title,author,status,rating,review,cover_url,isbn13,created_at"
+        `
+          id,title,author,status,rating,review,cover_url,isbn13,created_at,finished_at,
+          book_tags (
+            tags ( id, name )
+          )
+        `
       )
       .order("created_at", { ascending: false });
 
@@ -96,7 +125,22 @@ export default function AdminClient() {
       return;
     }
 
-    setBooks((data ?? []) as Book[]);
+    const normalized = (data ?? []).map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      author: row.author,
+      status: row.status,
+      rating: row.rating,
+      review: row.review,
+      cover_url: row.cover_url,
+      isbn13: row.isbn13,
+      created_at: row.created_at,
+      finished_at: row.finished_at,
+
+      tags: (row.book_tags ?? []).map((bt: any) => bt?.tags).filter(Boolean),
+    })) as Book[];
+
+    setBooks(normalized);
   }
 
   useEffect(() => {
@@ -109,6 +153,9 @@ export default function AdminClient() {
     window.location.href = "/login";
   }
 
+  // -------------------------
+  // Add book
+  // -------------------------
   async function addBook(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -120,6 +167,22 @@ export default function AdminClient() {
 
     const cleanedIsbn = cleanIsbn(isbn);
 
+    // Duplicate warning + confirm
+    if (cleanedIsbn) {
+      const dup = findDuplicateByIsbn(cleanedIsbn);
+      if (dup) {
+        const ok = confirm(
+          `This ISBN is already in your library:\n\n` +
+            `"${dup.title}"\n\n` +
+            `Do you still want to add another copy?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    // Finished date: stamp if added as READ
+    const finishedAt = status === "READ" ? new Date().toISOString() : null;
+
     setLoading(true);
     const { error } = await supabase.from("books").insert({
       owner_id: userId,
@@ -130,6 +193,7 @@ export default function AdminClient() {
       review: review.trim() || null,
       cover_url: coverUrl.trim() || null,
       isbn13: cleanedIsbn || null,
+      finished_at: finishedAt,
     });
     setLoading(false);
 
@@ -146,6 +210,7 @@ export default function AdminClient() {
     setReview("");
     setCoverUrl("");
     setIsbn("");
+    setDupWarning(null);
 
     await load();
   }
@@ -163,10 +228,16 @@ export default function AdminClient() {
     await load();
   }
 
+  // -------------------------
+  // ISBN Autofill
+  // -------------------------
   async function autofillByIsbn(isbnOverride?: string) {
     setError(null);
 
-    const cleaned = cleanIsbn(isbnOverride ?? isbn);
+    const cleaned = cleanIsbn(
+      typeof isbnOverride === "string" ? isbnOverride : isbn
+    );
+
     if (!cleaned) {
       setError("Enter an ISBN first.");
       return;
@@ -182,7 +253,6 @@ export default function AdminClient() {
         return;
       }
 
-      // Fill what we got
       if (data.title) setTitle(String(data.title));
       if (data.author) setAuthor(String(data.author));
       if (data.cover_url) setCoverUrl(String(data.cover_url));
@@ -190,6 +260,7 @@ export default function AdminClient() {
       // Keep ISBN in the field (prefer returned isbn13)
       if (data.isbn13) setIsbn(String(data.isbn13));
       else setIsbn(cleaned);
+      setDupWarning(null);
     } catch {
       setError("ISBN lookup failed.");
     } finally {
@@ -210,7 +281,7 @@ export default function AdminClient() {
       readerRef.current = new BrowserMultiFormatReader();
     }
 
-    // Let the overlay render <video> first
+    // Let overlay render <video>
     setTimeout(async () => {
       const video = videoRef.current;
       const reader = readerRef.current;
@@ -222,17 +293,15 @@ export default function AdminClient() {
       }
 
       try {
-        // Stop any previous scan
         try {
           controlsRef.current?.stop();
         } catch {}
         controlsRef.current = null;
 
-        // Start continuous decode
         const controls = await reader.decodeFromVideoDevice(
           undefined,
           video,
-          (result, err, ctrl) => {
+          (result, _err, ctrl) => {
             if (!result) return;
 
             const raw = result.getText();
@@ -240,20 +309,19 @@ export default function AdminClient() {
 
             const cleaned = cleanIsbn(raw);
 
-            // Only accept proper ISBN-10 or ISBN-13
+            // accept ISBN10/13
             if (cleaned.length === 10 || cleaned.length === 13) {
               setIsbn(cleaned);
 
-              // Stop scanning + close overlay
+              // stop + close overlay
               try {
                 ctrl.stop();
               } catch {}
               controlsRef.current = null;
 
-              // Close overlay
               setScanning(false);
 
-              // Trigger lookup using the scanned value directly (no state timing issues)
+              // lookup using scanned value directly
               void autofillByIsbn(cleaned);
             }
           }
@@ -280,6 +348,9 @@ export default function AdminClient() {
     setScanning(false);
   }
 
+  // -------------------------
+  // Edit
+  // -------------------------
   function openEdit(book: Book) {
     setEditing(book);
     setEditTitle(book.title ?? "");
@@ -289,6 +360,7 @@ export default function AdminClient() {
     setEditReview(book.review ?? "");
     setEditCoverUrl(book.cover_url ?? "");
     setEditIsbn(book.isbn13 ?? "");
+    setEditDupWarning(null);
   }
 
   function closeEdit() {
@@ -303,6 +375,30 @@ export default function AdminClient() {
 
     const cleanedIsbn = cleanIsbn(editIsbn);
 
+    // Duplicate warning + confirm (exclude current book)
+    if (cleanedIsbn) {
+      const dup = findDuplicateByIsbn(cleanedIsbn, editing.id);
+      if (dup) {
+        const ok = confirm(
+          `This ISBN already belongs to another book:\n\n` +
+            `"${dup.title}"\n\n` +
+            `Save anyway?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    // finished_at logic
+    const nextIsRead = editStatus === "READ";
+    const prevIsRead = editing.status === "READ";
+
+    const nextFinishedAt =
+      nextIsRead && !prevIsRead
+        ? new Date().toISOString()
+        : !nextIsRead
+          ? null
+          : editing.finished_at ?? null;
+
     setLoading(true);
     const { error } = await supabase
       .from("books")
@@ -314,6 +410,7 @@ export default function AdminClient() {
         review: editReview.trim() || null,
         cover_url: editCoverUrl.trim() || null,
         isbn13: cleanedIsbn || null,
+        finished_at: nextFinishedAt,
       })
       .eq("id", editing.id);
 
@@ -326,6 +423,74 @@ export default function AdminClient() {
 
     closeEdit();
     await load();
+  }
+
+  // -------------------------
+  // Tags
+  // -------------------------
+  async function addTagToBook(bookId: string) {
+    setError(null);
+
+    const raw = newTagByBookId[bookId] ?? "";
+    const name = normalizeTagName(raw);
+    if (!name) return;
+
+    const existing = (books.find((x) => x.id === bookId)?.tags ?? []).some(
+      (t) => t.name.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) {
+      // clear just this input and do nothing
+      setNewTagByBookId((prev) => ({ ...prev, [bookId]: "" }));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // ensure tag exists
+      const { data: tagRow, error: tagErr } = await supabase
+        .from("tags")
+        .upsert({ name }, { onConflict: "name" })
+        .select("id,name")
+        .single();
+
+      if (tagErr) throw tagErr;
+
+      // link tag -> book
+      const { error: linkErr } = await supabase
+        .from("book_tags")
+        .insert({ book_id: bookId, tag_id: tagRow.id });
+
+      // ignore duplicate link attempts
+      const msg = (linkErr?.message ?? "").toLowerCase();
+      if (linkErr && !msg.includes("duplicate")) throw linkErr;
+
+      setNewTagByBookId((prev) => ({ ...prev, [bookId]: "" }));
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to add tag.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeTagFromBook(bookId: string, tagId: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("book_tags")
+        .delete()
+        .eq("book_id", bookId)
+        .eq("tag_id", tagId);
+
+      if (error) throw error;
+
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to remove tag.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   // -------------------------
@@ -434,9 +599,25 @@ export default function AdminClient() {
               <input
                 className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={isbn}
-                onChange={(e) => setIsbn(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setIsbn(next);
+
+                  const cleaned = cleanIsbn(next);
+                  const dup = findDuplicateByIsbn(cleaned);
+                  if (cleaned && dup) {
+                    setDupWarning(
+                      `Duplicate ISBN detected: already added as “${dup.title}”.`
+                    );
+                  } else {
+                    setDupWarning(null);
+                  }
+                }}
                 placeholder="scan or type"
               />
+              {dupWarning ? (
+                <p className="mt-1 text-sm text-amber-700">{dupWarning}</p>
+              ) : null}
             </label>
           </div>
 
@@ -482,26 +663,85 @@ export default function AdminClient() {
           {books.map((b) => (
             <div
               key={b.id}
-              className="border rounded p-3 flex items-start justify-between gap-3"
+              className="border border-zinc-300 bg-white rounded p-3 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
                 <div className="font-medium truncate text-zinc-900">
                   {b.title}
                 </div>
+
                 <div className="text-sm text-zinc-600">
                   {b.author ?? "Unknown"} • {b.status}
                   {typeof b.rating === "number" ? ` • ⭐ ${b.rating}/5` : ""}
                 </div>
+
                 {b.isbn13 ? (
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-zinc-600 mt-1">
                     ISBN: {b.isbn13}
                   </div>
                 ) : null}
+
                 {b.review ? (
-                  <div className="text-sm mt-2 whitespace-pre-wrap text-gray-500">
+                  <div className="text-sm mt-2 whitespace-pre-wrap text-zinc-700">
                     {b.review}
                   </div>
                 ) : null}
+
+                {b.finished_at ? (
+                  <div className="text-xs text-zinc-600 mt-1">
+                    Finished: {new Date(b.finished_at).toLocaleDateString()}
+                  </div>
+                ) : null}
+
+                {/* TAGS */}
+                <div className="mt-3">
+                  <div className="flex flex-wrap gap-2 items-center text-black">
+                    {(b.tags ?? []).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => removeTagFromBook(b.id, t.id)}
+                        className="text-xs px-2 py-1 rounded border border-zinc-300 bg-zinc-50 hover:bg-zinc-100"
+                        title="Remove tag"
+                      >
+                        {t.name} <span className="ml-1 text-black">×</span>
+                      </button>
+                    ))}
+
+                    {!b.tags || b.tags.length === 0 ? (
+                      <span className="text-xs text-zinc-600">No tags yet</span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      className="w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900"
+                      value={newTagByBookId[b.id] ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewTagByBookId((prev) => ({
+                          ...prev,
+                          [b.id]: value,
+                        }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void addTagToBook(b.id);
+                        }
+                      }}
+                      placeholder='Add a tag like "Fantasy"'
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addTagToBook(b.id)}
+                      className="bg-indigo-600 text-white rounded px-3 py-2 font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      disabled={loading}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3 items-center">
@@ -566,7 +806,7 @@ export default function AdminClient() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className="bg-white text-zinc-900 rounded-lg p-4 w-full max-w-lg space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold ">Edit book</h3>
+              <h3 className="font-semibold">Edit book</h3>
               <button className="underline" onClick={closeEdit}>
                 Close
               </button>
@@ -671,9 +911,27 @@ export default function AdminClient() {
                   <input
                     className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={editIsbn}
-                    onChange={(e) => setEditIsbn(e.target.value)}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setEditIsbn(next);
+
+                      const cleaned = cleanIsbn(next);
+                      const dup = findDuplicateByIsbn(cleaned, editing?.id);
+                      if (cleaned && dup) {
+                        setEditDupWarning(
+                          `Duplicate ISBN: matches “${dup.title}”.`
+                        );
+                      } else {
+                        setEditDupWarning(null);
+                      }
+                    }}
                     placeholder="optional"
                   />
+                  {editDupWarning ? (
+                    <p className="mt-1 text-sm text-amber-700">
+                      {editDupWarning}
+                    </p>
+                  ) : null}
                 </label>
               </div>
 

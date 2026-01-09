@@ -20,6 +20,7 @@ type Props = {
     q?: string;
     sort?: "newest" | "rated";
     ratedOnly?: "1";
+    tag?: string; // tag id
   }>;
 };
 
@@ -29,8 +30,16 @@ export default async function Home({ searchParams }: Props) {
   const q = (sp.q ?? "").trim();
   const sort = sp.sort ?? "newest";
   const ratedOnly = sp.ratedOnly === "1";
+  const tag = (sp.tag ?? "").trim();
 
   const supabase = await createSupabaseServerClient();
+
+  const { data: tagsData } = await supabase
+    .from("tags")
+    .select("id,name")
+    .order("name", { ascending: true });
+
+  const tags = tagsData ?? [];
 
   const [
     { count: readCount },
@@ -51,10 +60,38 @@ export default async function Home({ searchParams }: Props) {
       .eq("status", "WISHLIST"),
   ]);
 
+  const year = new Date().getFullYear();
+  const start = new Date(Date.UTC(year, 0, 1)).toISOString();
+  const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
+
+  const { count: readThisYearCount } = await supabase
+    .from("books")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "READ")
+    .gte("finished_at", start)
+    .lt("finished_at", end);
+
   let query = supabase
     .from("books")
     .select("id,title,author,status,rating,review,cover_url,created_at")
     .eq("status", status);
+
+  if (tag) {
+    const { data: idsData } = await supabase
+      .from("book_tags")
+      .select("book_id")
+      .eq("tag_id", tag);
+
+    const ids = (idsData ?? []).map((x: any) => x.book_id);
+
+    if (ids.length === 0) {
+      // no matches
+      const books: Book[] = [];
+      // render with zero results later by skipping query
+    } else {
+      query = query.in("id", ids);
+    }
+  }
 
   if (q) {
     // Supabase OR filter: match title OR author
@@ -119,7 +156,7 @@ export default async function Home({ searchParams }: Props) {
       </header>
 
       {/* Global Stats */}
-      <section className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <section className="mt-6 grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Link
           href="/?status=TO_READ"
           className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
@@ -141,7 +178,7 @@ export default async function Home({ searchParams }: Props) {
           </p>
           <p className="mt-2 text-xs text-zinc-600">View</p>
         </Link>
-        
+
         <Link
           href="/?status=WISHLIST"
           className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
@@ -151,6 +188,17 @@ export default async function Home({ searchParams }: Props) {
             {wishlistCount ?? 0}
           </p>
           <p className="mt-2 text-xs text-zinc-600">View</p>
+        </Link>
+
+        <Link
+          href="/?status=READ"
+          className="block border border-zinc-300 bg-white rounded-lg p-4 hover:bg-zinc-50 transition-colors"
+        >
+          <p className="text-sm font-medium text-zinc-700">Read this year</p>
+          <p className="mt-1 text-3xl font-bold text-zinc-900">
+            {readThisYearCount ?? 0}
+          </p>
+          <p className="mt-2 text-xs text-zinc-600">{year}</p>
         </Link>
       </section>
 
@@ -201,6 +249,24 @@ export default async function Home({ searchParams }: Props) {
               >
                 <option value="newest">Newest</option>
                 <option value="rated">Highest rated</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="md:col-span-3">
+            <label className="block">
+              <span className="text-sm font-medium text-zinc-800">Tag</span>
+              <select
+                name="tag"
+                defaultValue={tag}
+                className="mt-1 w-full border border-zinc-400 rounded p-2 bg-white text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">All tags</option>
+                {tags.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
