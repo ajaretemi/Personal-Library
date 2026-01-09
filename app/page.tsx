@@ -15,17 +15,23 @@ type Book = {
 };
 
 type Props = {
-  searchParams?: Promise<{
+  searchParams?: {
     status?: BookStatus;
     q?: string;
     sort?: "newest" | "rated";
     ratedOnly?: "1";
     tag?: string; // tag id
-  }>;
+  };
 };
 
+function escapeForIlike(input: string) {
+  // Escape characters that can mess with ilike patterns
+  // Backslash first, then % and _
+  return input.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 export default async function Home({ searchParams }: Props) {
-  const sp = (await searchParams) ?? {};
+  const sp = searchParams ?? {};
   const status = (sp.status ?? "TO_READ") as BookStatus;
   const q = (sp.q ?? "").trim();
   const sort = sp.sort ?? "newest";
@@ -71,32 +77,42 @@ export default async function Home({ searchParams }: Props) {
     .gte("finished_at", start)
     .lt("finished_at", end);
 
+  // Build base query
   let query = supabase
     .from("books")
     .select("id,title,author,status,rating,review,cover_url,created_at")
     .eq("status", status);
 
+  // If tag selected, fetch matching book IDs then filter with .in(...)
+  let tagMatchedAny = true;
+
   if (tag) {
-    const { data: idsData } = await supabase
+    const { data: idsData, error: idsErr } = await supabase
       .from("book_tags")
       .select("book_id")
       .eq("tag_id", tag);
 
-    const ids = (idsData ?? []).map((x: any) => x.book_id);
-
-    if (ids.length === 0) {
-      // no matches
-      const books: Book[] = [];
-      // render with zero results later by skipping query
+    if (idsErr) {
+      // if this fails, we'll just show error later via query error
+      tagMatchedAny = true;
     } else {
-      query = query.in("id", ids);
+      const ids = (idsData ?? []).map((x: any) => x.book_id);
+      if (ids.length === 0) {
+        tagMatchedAny = false;
+      } else {
+        query = query.in("id", ids);
+      }
     }
   }
 
+  // Search: title OR author (FIXED)
   if (q) {
-    // Supabase OR filter: match title OR author
-    const escaped = q.replace(/"/g, '\\"');
-    query = query.or(`title.ilike."%${escaped}%",author.ilike."%${escaped}%"`);
+    const safe = escapeForIlike(q);
+    const pattern = `%${safe}%`;
+
+    // IMPORTANT: no quotes around pattern
+    // Also add `\\` escape hint by using PostgREST syntax: ilike.%...%
+    query = query.or(`title.ilike.${pattern},author.ilike.${pattern}`);
   }
 
   if (ratedOnly) query = query.not("rating", "is", null);
@@ -109,8 +125,16 @@ export default async function Home({ searchParams }: Props) {
     query = query.order("created_at", { ascending: false });
   }
 
-  const { data, error } = await query;
-  const books = (data ?? []) as Book[];
+  let books: Book[] = [];
+  let error: any = null;
+
+  if (!tagMatchedAny) {
+    books = [];
+  } else {
+    const res = await query;
+    books = (res.data ?? []) as Book[];
+    error = res.error ?? null;
+  }
 
   const buildHref = (params: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -119,11 +143,13 @@ export default async function Home({ searchParams }: Props) {
     const nextQ = params.q ?? q;
     const nextSort = params.sort ?? sort;
     const nextRatedOnly = params.ratedOnly ?? (ratedOnly ? "1" : undefined);
+    const nextTag = params.tag ?? (tag || undefined);
 
     if (nextStatus) p.set("status", nextStatus);
     if (nextQ) p.set("q", nextQ);
     if (nextSort) p.set("sort", nextSort);
     if (nextRatedOnly) p.set("ratedOnly", nextRatedOnly);
+    if (nextTag) p.set("tag", nextTag);
 
     const qs = p.toString();
     return qs ? `/?${qs}` : "/";
@@ -140,9 +166,7 @@ export default async function Home({ searchParams }: Props) {
       <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">My Library</h1>
-          <p className="text-sm text-white">
-            Public view — you edit from Admin.
-          </p>
+          <p className="text-sm text-white">Public view — you edit from Admin.</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -338,6 +362,7 @@ export default async function Home({ searchParams }: Props) {
                     <span className="text-zinc-600">Not rated</span>
                   )}
                 </div>
+
                 {b.review ? (
                   <p className="mt-2 text-xs text-zinc-700 line-clamp-3">
                     {b.review.length > 140
